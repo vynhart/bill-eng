@@ -10,6 +10,7 @@ import (
 type LoanMock struct {
 	interest float32
 	interestType string
+	installment int
 }
 
 func (lm *LoanMock) GetId() string {
@@ -21,7 +22,7 @@ func (lm *LoanMock) GetRepaymentTerm() string {
 }
 
 func (lm *LoanMock) GetInstallment() int {
-	return 50
+	return lm.installment
 }
 
 func (lm *LoanMock) GetInterestType() string {
@@ -44,27 +45,24 @@ func (lm *LoanMock) GetDisbursedAt() time.Time {
 	return time.Now().Add(time.Hour * -1)
 }
 
-type LoanServiceMock struct {
-	loan Loan
-}
-
-func (lsm *LoanServiceMock) GetLoan(id string) (Loan) {
-	return lsm.loan
-}
-
-func TestGenerateBillForLoanSuccess(t *testing.T) {
+func Test_GenerateBillForLoan(t *testing.T) {
 	loan := &LoanMock{
 		interest: 10.0,
 		interestType: "flat_annual",
+		installment: 10,
 	}
 
 	srv := NewService()
-	srv.LoanSrv = &LoanServiceMock{
-		loan: loan,
-	}
-
 	err := srv.GenerateBillForLoan(loan)
 	if err != nil {
 		t.Fatal("GenerateBilLForLoan return unexpected error: ", err)
 	}
+
+	// second time the method is called it should raise error
+	// because the bill should exists on database
+	err = srv.GenerateBillForLoan(loan)
+	if err == nil {
+		t.Fatal("Second time GenerateBillForLoan is called for the same record, it should be failed")
+	}
 }
+

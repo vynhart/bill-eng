@@ -1,13 +1,11 @@
 package bill
 
 import (
-	"errors"
 	"fmt"
 	"time"
 )
 
 type Service struct {
-	LoanSrv LoanService
 	repo    *Repository
 }
 
@@ -22,10 +20,6 @@ const WEEKLY = "weekly"
 const MONTHLY = "monthly"
 
 func (s *Service) GenerateBillForLoan(loan Loan) error {
-	if s.LoanSrv == nil {
-		return errors.New("loan service is not set")
-	}
-
 	if s.repo.IsBillingExistsForLoanId(loan.GetId()) {
 		return fmt.Errorf("billing for loan id %s is already generated", loan.GetId())
 	}
