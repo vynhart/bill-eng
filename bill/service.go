@@ -21,7 +21,7 @@ func NewDatabase(config map[string]string) *database.Queries {
 	dbHost := config["db_host"]
 	dbName := config["db_name"]
 
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", dbUser, dbPassword, dbHost, dbName))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true", dbUser, dbPassword, dbHost, dbName))
 	if err != nil {
 		panic(err)
 	}
@@ -52,20 +52,48 @@ func (s *Service) GenerateBillForLoan(loan Loan) error {
 	return fmt.Errorf("interest type %s is not known", loan.GetInterestType())
 }
 
-func (s *Service) OutstandingAmount(loan Loan) int {
-	return 0 // fixme
+func (s *Service) GetOutstandingAmount(loanId string) uint32 {
+	amt, err := s.db.GetOutStandingAmount(context.Background(), loanId)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var sum uint32
+	for _, v := range amt {
+		sum += v
+	}
+	return sum
 }
 
 func (s *Service) IsDelinquent(custId string) bool {
-	return false // fixme
+	ovrdue, err := s.db.CountCustomerOverdue(context.Background(), custId)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return ovrdue > 1
 }
 
-func (s *Service) MarkBillAsPaid(billId string) error {
-	return nil // fixme
+func (s *Service) MarkBillAsPaid(billId uint32, t time.Time) error {
+	return s.db.MarkBillAsPaid(context.Background(), database.MarkBillAsPaidParams{
+		PaidAt: sql.NullTime{
+			Time: t,
+			Valid: true,
+		},
+		ID: billId,
+	})
+}
+
+func (s *Service) GetOutstandingBill(loanId string) []database.Bill {
+	bills, err := s.db.GetOutStandingBills(context.Background(), loanId)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println(bills[0].ID)
+	return bills
 }
 
 func (s *Service) generateFlatInterestBills(loan Loan) error {
-	loanAndIntr := loan.GetAmount() + (loan.GetAmount() * uint(loan.GetInterest()))
+	loanAndIntr := loan.GetAmount() + uint((float32(loan.GetAmount()) * loan.GetInterest()))
 
 	startDate := startOfDay(loan.GetDisbursedAt().Add(time.Hour * 24))
 	dueDate, err := calcDueDate(startDate, loan.GetRepaymentTerm())
@@ -79,9 +107,7 @@ func (s *Service) generateFlatInterestBills(loan Loan) error {
 			LoanID:    loan.GetId(),
 			StartDate: startDate,
 			DueDate:   dueDate,
-			Amount: sql.NullInt32{
-				Int32: int32(billAmount),
-			},
+			Amount: uint32(billAmount),
 			CustomerID: loan.GetCustomerId(),
 		}
 		err := s.db.CreateBill(context.Background(), param)

@@ -5,7 +5,7 @@ CREATE TABLE bills (
     start_date DATETIME NOT NULL,
     due_date DATETIME NOT NULL,
     paid_at TIMESTAMP,
-    amount INT UNSIGNED,
+    amount INT UNSIGNED NOT NULL,
     status ENUM('waiting_for_payment', 'paid') DEFAULT 'waiting_for_payment',
     payment_id VARCHAR(40)
 );

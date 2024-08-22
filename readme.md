@@ -37,3 +37,15 @@ go run . migrate
 # Testing
 
 This service requires database to run the test.
+
+First, make sure you've setup database and run migration on testing env:
+
+```
+ENV=testing go run . migrate
+```
+
+Then run test:
+
+```
+go test ./...
+```

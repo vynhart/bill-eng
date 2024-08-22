@@ -13,6 +13,12 @@ UPDATE bills SET paid_at = ? WHERE id = ?;
 -- name: CountCustomerOverdue :one
 SELECT COUNT(*) FROM bills WHERE customer_id = ? AND due_date < NOW() AND paid_at IS NULL;
 
+-- name: GetOutStandingAmount :many
+SELECT amount FROM bills WHERE loan_id = ? AND due_date >= NOW() AND paid_at IS NULL;
+
+-- name: GetOutStandingBills :many
+SELECT * FROM bills WHERE loan_id = ? AND due_date >= NOW() AND paid_at IS NULL ORDER BY id;
+
 -- name: FindBillByLoanId :one
 SELECT * FROM bills WHERE loan_id = ? LIMIT 1;
 

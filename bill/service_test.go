@@ -11,11 +11,13 @@ import (
 )
 
 type LoanMock struct {
-	id string
-	custId string
-	interest float32
+	id           string
+	custId       string
+	interest     float32
 	interestType string
-	installment int
+	installment  int
+	amount       int
+	disbursedAt  time.Time
 }
 
 func (lm *LoanMock) GetId() string {
@@ -39,7 +41,7 @@ func (lm *LoanMock) GetInterest() float32 {
 }
 
 func (lm *LoanMock) GetAmount() uint {
-	return 5000000
+	return uint(lm.amount)
 }
 
 func (lm *LoanMock) GetCustomerId() string {
@@ -47,9 +49,8 @@ func (lm *LoanMock) GetCustomerId() string {
 }
 
 func (lm *LoanMock) GetDisbursedAt() time.Time {
-	return time.Now().Add(time.Hour * -1)
+	return lm.disbursedAt
 }
-
 
 func getConfigTest() map[string]string {
 	fileName := "../.env.testing"
@@ -66,13 +67,15 @@ func getConfigTest() map[string]string {
 	}
 }
 
-func Test_GenerateBillForLoan(t *testing.T) {
+func Test_BillService(t *testing.T) {
 	loan := &LoanMock{
-		id: uuid.New().String(),
-		custId: uuid.New().String(),
-		interest: 10.0,
+		id:           uuid.New().String(),
+		custId:       uuid.New().String(),
+		interest:     0.1,
 		interestType: "flat_annual",
-		installment: 10,
+		installment:  10,
+		amount:       5000000,
+		disbursedAt:  time.Now().Add(time.Hour * -1),
 	}
 
 	srv := NewService(getConfigTest())
@@ -81,11 +84,55 @@ func Test_GenerateBillForLoan(t *testing.T) {
 		t.Fatal("GenerateBilLForLoan return unexpected error: ", err)
 	}
 
-	// second time the method is called it should raise error
-	// because the bill should exists on database
 	err = srv.GenerateBillForLoan(loan)
 	if err == nil {
 		t.Fatal("Second time GenerateBillForLoan is called for the same record, it should be failed")
 	}
+
+	outsAmt := srv.GetOutstandingAmount(loan.GetId())
+	if outsAmt != uint32(5500000) {
+		t.Fatalf("incorrect outstanding amount %v", outsAmt)
+	}
+
+	bills := srv.GetOutstandingBill(loan.GetId())
+	if len(bills) == 0 {
+		t.Fatalf("outstanding bill is empty")
+	}
+
+	outsBill := bills[0]
+	t.Log(outsBill.ID)
+	err = srv.MarkBillAsPaid(outsBill.ID, time.Now().Add(time.Hour*-1))
+	if err != nil {
+		t.Fatal("error when marking bill as paid")
+	}
+
+	outsAmtAfterPaid := srv.GetOutstandingAmount(loan.GetId())
+	if outsAmtAfterPaid != outsAmt-outsBill.Amount {
+		t.Fatalf("incorrect outstanding amount after paid %v", outsAmtAfterPaid)
+	}
+
+	deliq := srv.IsDelinquent(loan.GetCustomerId())
+	if deliq {
+		t.Fatalf("Customer should not be deliquent")
+	}
 }
 
+func Test_BillService_IsDeliquent(t *testing.T) {
+	loan := &LoanMock{
+		id:           uuid.New().String(),
+		custId:       uuid.New().String(),
+		interest:     0.1,
+		interestType: "flat_annual",
+		installment:  10,
+		amount:       5000000,
+		disbursedAt:  time.Now().Add(time.Hour * -1 * 24 * 16),
+	}
+
+	srv := NewService(getConfigTest())
+	srv.GenerateBillForLoan(loan)
+
+	deliq := srv.IsDelinquent(loan.GetCustomerId())
+	if !deliq {
+		t.Fatalf("Customer should be deliquent")
+	}
+}

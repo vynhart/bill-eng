@@ -60,7 +60,7 @@ type Bill struct {
 	StartDate  time.Time
 	DueDate    time.Time
 	PaidAt     sql.NullTime
-	Amount     sql.NullInt32
+	Amount     uint32
 	Status     NullBillsStatus
 	PaymentID  sql.NullString
 }

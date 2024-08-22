@@ -31,7 +31,7 @@ type CreateBillParams struct {
 	CustomerID string
 	StartDate  time.Time
 	DueDate    time.Time
-	Amount     sql.NullInt32
+	Amount     uint32
 }
 
 func (q *Queries) CreateBill(ctx context.Context, arg CreateBillParams) error {
@@ -85,6 +85,70 @@ func (q *Queries) FindBillByLoanId(ctx context.Context, loanID string) (Bill, er
 		&i.PaymentID,
 	)
 	return i, err
+}
+
+const getOutStandingAmount = `-- name: GetOutStandingAmount :many
+SELECT amount FROM bills WHERE loan_id = ? AND due_date >= NOW() AND paid_at IS NULL
+`
+
+func (q *Queries) GetOutStandingAmount(ctx context.Context, loanID string) ([]uint32, error) {
+	rows, err := q.db.QueryContext(ctx, getOutStandingAmount, loanID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uint32
+	for rows.Next() {
+		var amount uint32
+		if err := rows.Scan(&amount); err != nil {
+			return nil, err
+		}
+		items = append(items, amount)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOutStandingBills = `-- name: GetOutStandingBills :many
+SELECT id, loan_id, customer_id, start_date, due_date, paid_at, amount, status, payment_id FROM bills WHERE loan_id = ? AND due_date >= NOW() AND paid_at IS NULL ORDER BY id
+`
+
+func (q *Queries) GetOutStandingBills(ctx context.Context, loanID string) ([]Bill, error) {
+	rows, err := q.db.QueryContext(ctx, getOutStandingBills, loanID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Bill
+	for rows.Next() {
+		var i Bill
+		if err := rows.Scan(
+			&i.ID,
+			&i.LoanID,
+			&i.CustomerID,
+			&i.StartDate,
+			&i.DueDate,
+			&i.PaidAt,
+			&i.Amount,
+			&i.Status,
+			&i.PaymentID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listBillByCustId = `-- name: ListBillByCustId :many
