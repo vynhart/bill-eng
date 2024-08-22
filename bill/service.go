@@ -1,17 +1,36 @@
 package bill
 
 import (
+	"amartha_bill_eng/bill/database"
+	"context"
+	"database/sql"
 	"fmt"
+	"log"
 	"time"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type Service struct {
-	repo    *Repository
+	db *database.Queries
 }
 
-func NewService() *Service {
+func NewDatabase(config map[string]string) *database.Queries {
+	dbUser := config["db_username"]
+	dbPassword := config["db_password"]
+	dbHost := config["db_host"]
+	dbName := config["db_name"]
+
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s)/%s", dbUser, dbPassword, dbHost, dbName))
+	if err != nil {
+		panic(err)
+	}
+	return database.New(db)
+}
+
+func NewService(config map[string]string) *Service {
 	return &Service{
-		repo: NewRepository(),
+		db: NewDatabase(config),
 	}
 }
 
@@ -20,7 +39,9 @@ const WEEKLY = "weekly"
 const MONTHLY = "monthly"
 
 func (s *Service) GenerateBillForLoan(loan Loan) error {
-	if s.repo.IsBillingExistsForLoanId(loan.GetId()) {
+	ctx := context.Background()
+	bill, err := s.db.FindBillByLoanId(ctx, loan.GetId())
+	if err == nil || bill.ID != 0 {
 		return fmt.Errorf("billing for loan id %s is already generated", loan.GetId())
 	}
 
@@ -52,22 +73,24 @@ func (s *Service) generateFlatInterestBills(loan Loan) error {
 		return err
 	}
 
-	bills := []Bill{}
 	billAmount := loanAndIntr / uint(loan.GetInstallment())
 	for i := 0; i < loan.GetInstallment(); i++ {
-		bill := Bill{
-			LoanId:    loan.GetId(),
+		param := database.CreateBillParams{
+			LoanID:    loan.GetId(),
 			StartDate: startDate,
 			DueDate:   dueDate,
-			Amount:    billAmount,
-			Status:    STATUS_WAITING_FOR_PAYMENT,
+			Amount: sql.NullInt32{
+				Int32: int32(billAmount),
+			},
+			CustomerID: loan.GetCustomerId(),
 		}
-		bills = append(bills, bill)
-		startDate := startOfDay(bill.DueDate.Add(time.Hour * 24))
+		err := s.db.CreateBill(context.Background(), param)
+		if err != nil {
+			log.Fatal(err)
+		}
+		startDate = startOfDay(dueDate.Add(time.Hour * 24))
 		dueDate, _ = calcDueDate(startDate, loan.GetRepaymentTerm())
 	}
-
-	s.repo.BulkInsert(bills)
 
 	return nil
 }

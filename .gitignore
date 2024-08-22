@@ -1,0 +1,3 @@
+dev/mysql_data
+.env
+.env.testing

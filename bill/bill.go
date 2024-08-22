@@ -16,6 +16,7 @@ type Bill struct {
 	PaidAt    time.Time `json:"paid_at"`
 	Amount    uint      `json:"amount"`
 	Status    string    `json:"status"`
+	CustomerId string `json:"customer_id"`
 	PaymentId string    `json:"payment_id"`
 }
 
