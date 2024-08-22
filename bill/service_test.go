@@ -99,6 +99,20 @@ func Test_BillService(t *testing.T) {
 		t.Fatalf("outstanding bill is empty")
 	}
 
+	prevBill := bills[0]
+	for i, b := range bills {
+		if b.DueDate.Sub(b.StartDate) < (time.Hour * 24 * 7) - time.Minute {
+			t.Fatal("due date is incorrect")
+		}
+		if i == 0 {
+			continue
+		}
+		if b.StartDate.Sub(prevBill.StartDate) < time.Hour * 24 * 7 {
+			t.Fatal("start date between billing is incorrect")
+		}
+		prevBill = b
+	}
+
 	outsBill := bills[0]
 	t.Log(outsBill.ID)
 	err = srv.MarkBillAsPaid(outsBill.ID, time.Now().Add(time.Hour*-1))
